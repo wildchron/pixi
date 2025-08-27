@@ -802,6 +802,25 @@ impl ManifestDocument {
 
         Ok(())
     }
+
+    /// Sets the conda-pypi-map of the project
+    pub fn set_conda_pypi_map(&mut self, conda_pypi_map: &str) -> Result<(), TomlError> {
+        let table_name = TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_table(Some(self.detect_table_name()));
+
+        let table = self
+            .manifest_mut()
+            .get_or_insert_nested_table(&table_name.as_keys())?;
+
+        if let Some(item) = table.get_mut("conda-pypi-map") {
+            *item = value(conda_pypi_map);
+        } else {
+            table.insert("conda-pypi-map", value(conda_pypi_map));
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]

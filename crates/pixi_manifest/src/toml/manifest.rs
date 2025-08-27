@@ -4,6 +4,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use rattler_conda_types::NamedChannelOrUrl;
+
 use indexmap::IndexMap;
 use miette::LabeledSpan;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
@@ -573,6 +575,7 @@ pub struct ExternalWorkspaceProperties {
     pub repository: Option<Url>,
     pub documentation: Option<Url>,
     pub features: IndexMap<FeatureName, Feature>,
+    pub conda_pypi_map: Option<HashMap<NamedChannelOrUrl, String>>,
 }
 
 #[cfg(test)]

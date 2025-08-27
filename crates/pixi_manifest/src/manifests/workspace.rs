@@ -5,7 +5,7 @@ use itertools::Itertools;
 use miette::{Context, IntoDiagnostic, SourceCode, miette};
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
-use rattler_conda_types::{ParseStrictness::Strict, Platform, Version, VersionSpec};
+use rattler_conda_types::{NamedChannelOrUrl, ParseStrictness::Strict, Platform, Version, VersionSpec};
 use toml_edit::Value;
 
 use crate::{
@@ -761,6 +761,24 @@ impl WorkspaceManifestMut<'_> {
             None => None,
         };
         self.document.set_requires_pixi(version).into_diagnostic()
+    }
+
+    /// Set the conda-pypi-map for the project
+    pub fn set_conda_pypi_map(&mut self, conda_pypi_map: &HashMap<NamedChannelOrUrl, String>) -> miette::Result<()> {
+        let conda_pypi_map_str = if conda_pypi_map.is_empty() {
+            "{}".to_string()
+        } else {
+            let map_items = conda_pypi_map
+                .iter()
+                .map(|(k, v)| format!("\"{}\" = \"{}\"", k, v))
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("{{ {map_items} }}")
+        };
+
+        self.workspace.workspace.conda_pypi_map = Some(conda_pypi_map.clone());
+        self.document.set_conda_pypi_map(&conda_pypi_map_str)?;
+        Ok(())
     }
 }
 

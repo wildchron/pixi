@@ -198,7 +198,7 @@ pub type SourceSpecs = indexmap::IndexMap<PackageName, (SourceSpec, SpecType)>;
 
 impl Workspace {
     /// Constructs a new instance from an internal manifest representation
-    pub(crate) fn from_manifests(manifest: Manifests) -> Self {
+    pub(crate) fn from_manifests(mut manifest: Manifests) -> Self {
         let env_vars = Workspace::init_env_vars(&manifest.workspace.value.environments);
         // Canonicalize the root path
         let root = &manifest.workspace.provenance.path;
@@ -230,6 +230,8 @@ impl Workspace {
             .collect::<HashMap<String, s3_middleware::S3Config>>();
 
         let config = Config::load(&root);
+        manifest.workspace.value.workspace.conda_pypi_map = config.conda_pypi_map.clone();
+
         Self {
             root,
             manifest_location_name,

@@ -491,6 +491,7 @@ impl PyPIConfig {
         self.index_url.is_none()
             && self.extra_index_urls.is_empty()
             && self.keyring_provider.is_none()
+            && self.allow_insecure_host.is_empty()
     }
 }
 
@@ -644,6 +645,11 @@ pub struct Config {
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     pub mirrors: HashMap<Url, Vec<Url>>,
 
+    /// Mapping of conda package names to PyPI package names.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub conda_pypi_map: Option<HashMap<NamedChannelOrUrl, String>>,
+
     /// Dependency Pinning strategy used for dependency modification through
     /// automated logic like `pixi add`
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -739,6 +745,7 @@ impl Default for Config {
             authentication_override_file: None,
             tls_no_verify: None,
             mirrors: HashMap::new(),
+            conda_pypi_map: None,
             loaded_from: Vec::new(),
             channel_config: default_channel_config(),
             repodata_config: RepodataConfig::default(),
@@ -793,6 +800,7 @@ impl From<ConfigCli> for Config {
                 },
             },
             pinning_strategy: cli.pinning_strategy,
+            conda_pypi_map: None,
             ..Default::default()
         }
     }
@@ -1333,6 +1341,16 @@ impl Config {
         self.mirrors.extend(other.mirrors);
         other.loaded_from.extend(self.loaded_from);
 
+        let conda_pypi_map = match (self.conda_pypi_map, other.conda_pypi_map) {
+            (Some(mut self_map), Some(other_map)) => {
+                self_map.extend(other_map);
+                Some(self_map)
+            }
+            (Some(self_map), None) => Some(self_map),
+            (None, Some(other_map)) => Some(other_map),
+            (None, None) => None,
+        };
+
         Self {
             default_channels: if other.default_channels.is_empty() {
                 self.default_channels
@@ -1345,6 +1363,7 @@ impl Config {
                 .or(self.authentication_override_file),
             // Extended self.mirrors with other.mirrors
             mirrors: self.mirrors,
+            conda_pypi_map,
             loaded_from: other.loaded_from,
             // currently this is always the default so just use the other value
             channel_config: other.channel_config,

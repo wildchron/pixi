@@ -379,6 +379,7 @@ impl PyProjectManifest {
                 repository: None,
                 documentation: None,
                 features: implicit_pypi_features,
+                conda_pypi_map: None,
             },
             package_defaults,
             root_directory,
@@ -519,14 +520,9 @@ fn contacts_to_authors(contacts: Vec<Spanned<TomlContact>>) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
+    use crate::{manifests::workspace::Workspace, ManifestSource, Manifests};
 
-    use pep440_rs::VersionSpecifiers;
-    use rattler_conda_types::{ParseStrictness, VersionSpec};
-
-    use crate::{ManifestSource, Manifests};
-
-    const PYPROJECT_FULL: &str = r#"
+    const PYPROJECT_FULL: &str = r#"""
         [project]
         name = "project"
         version = "0.1.0"
@@ -535,7 +531,7 @@ mod tests {
             { name = "Author", email = "author@bla.com" }
         ]
 
-        [tool.pixi.project]
+        [tool.pixi.workspace]
         channels = ["stable"]
         platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
         license = "MIT"
@@ -544,6 +540,7 @@ mod tests {
         homepage = "https://project.com"
         repository = "https://github.com/author/project"
         documentation = "https://docs.project.com"
+        conda-pypi-map = "{ \"conda-package\" = \"pypi-package\" }"
 
         [tool.pixi.dependencies]
         test = "bla"
@@ -666,12 +663,31 @@ mod tests {
         [tool.pixi.feature.cuda2]
         channels = ["nvidia"]
         platforms = ["linux-64", "osx-arm64"]
-        "#;
+        """#;
 
     #[test]
     fn test_build_manifest() {
         let source = ManifestSource::PyProjectToml(PYPROJECT_FULL.to_string());
-        let _ = Manifests::from_workspace_source(source.with_provenance_from_kind()).unwrap();
+        let mut manifest = Manifests::from_workspace_source(source.with_provenance_from_kind()).unwrap();
+        let conda_pypi_map = manifest.workspace.conda_pypi_map.as_ref().unwrap();
+        assert_eq!(conda_pypi_map.len(), 1);
+        assert_eq!(
+            conda_pypi_map.get(&NamedChannelOrUrl::Name("conda-package".to_string())).unwrap(),
+            "pypi-package"
+        );
+
+        // Create a mutable manifest
+        let mut editable = manifest.editable();
+
+        // Create a new map and set it
+        let mut new_map = HashMap::new();
+        new_map.insert(NamedChannelOrUrl::Name("new-conda".to_string()), "new-pypi".to_string());
+        editable.set_conda_pypi_map(&new_map).unwrap();
+
+        // Check that the serialized string contains the new map
+        let toml_string = editable.document.to_string();
+        let expected_map_string = "conda-pypi-map = \"{ \\\"new-conda\\\" = \\\"new-pypi\\\" }\"";
+        assert!(toml_string.contains(expected_map_string));
     }
 
     #[test]

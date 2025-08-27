@@ -85,6 +85,9 @@ channels = {{ channels }}
 name = "{{ name }}"
 platforms = {{ platforms }}
 version = "{{ version }}"
+{%- if has_conda_pypi_map %}
+conda-pypi-map = {{ conda_pypi_map }}
+{%- endif %}
 
 {%- if index_url or extra_index_urls %}
 
@@ -134,6 +137,9 @@ name = "{{ name }}"
 {%- endif %}
 channels = {{ channels }}
 platforms = {{ platforms }}
+{%- if has_conda_pypi_map %}
+conda-pypi-map = {{ conda_pypi_map }}
+{%- endif %}
 
 [tool.pixi.pypi-dependencies]
 {{ name }} = { path = ".", editable = true }
@@ -188,7 +194,9 @@ requires = ["hatchling"]
 [tool.pixi.workspace]
 channels = {{ channels }}
 platforms = {{ platforms }}
-
+{%- if has_conda_pypi_map %}
+conda-pypi-map = {{ conda_pypi_map }}
+{%- endif %}
 
 {%- if index_url or extra_index_urls %}
 
@@ -330,6 +338,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             None,
             &vec![],
             config.s3_options,
+            conda_pypi_map,
             Some(&env_vars),
         );
         let mut workspace =
@@ -414,7 +423,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         platforms,
                         environments,
                         s3 => relevant_s3_options(config.s3_options, channels),
-                    },
+                        has_conda_pypi_map => conda_pypi_map_str.is_some(),
+                        conda_pypi_map => conda_pypi_map_str,                    },
                 )
                 .expect("should be able to render the template");
             if let Err(e) = {
@@ -456,6 +466,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .map(|name| name.as_dist_info_name().to_string())
                 .unwrap_or_else(|_| default_name.clone());
 
+            let conda_pypi_map_str = config.conda_pypi_map.map(|map| {
+                if map.is_empty() {
+                    "{}".to_string()
+                } else {
+                    let map_items = map
+                        .into_iter()
+                        .map(|(k, v)| format!("\"{{}}\" = \"{{}}\"", k, v))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    format!("{{ {{ {map_items} }} }}")
+                }
+            });
+
             let rv = env
                 .render_named_str(
                     consts::PYPROJECT_MANIFEST,
@@ -469,7 +492,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         platforms,
                         index_url => index_url.as_ref(),
                         extra_index_urls => &extra_index_urls,
-                        s3 => relevant_s3_options(config.s3_options, channels),
+                        s3 => relevant_s3_options(config.s3_options, channels.clone()),
+                        has_conda_pypi_map => conda_pypi_map_str.is_some(),
+                        conda_pypi_map => conda_pypi_map_str,
                     },
                 )
                 .expect("should be able to render the template");
@@ -523,6 +548,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 index_url.as_ref(),
                 &extra_index_urls,
                 config.s3_options,
+                config.conda_pypi_map,
                 None,
             );
             save_manifest_file(&path, rv)?;
@@ -563,8 +589,22 @@ fn render_workspace(
     index_url: Option<&Url>,
     extra_index_urls: &Vec<Url>,
     s3_options: HashMap<String, pixi_config::S3Options>,
+    conda_pypi_map: Option<HashMap<NamedChannelOrUrl, String>>,
     env_vars: Option<&HashMap<String, String>>,
 ) -> String {
+    let conda_pypi_map_str = conda_pypi_map.map(|map| {
+        if map.is_empty() {
+            "{}".to_string()
+        } else {
+            let map_items = map
+                .into_iter()
+                .map(|(k, v)| format!("\"{}\" = \"{}\"", k, v))
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("{{{map_items}}}")
+        }
+    });
+
     let ctx = context! {
         name,
         version,
@@ -573,7 +613,9 @@ fn render_workspace(
         platforms,
         index_url,
         extra_index_urls,
-        s3 => relevant_s3_options(s3_options, channels),
+        s3 => relevant_s3_options(s3_options, channels.clone()),
+        has_conda_pypi_map => conda_pypi_map_str.is_some(),
+        conda_pypi_map => conda_pypi_map_str,
         env_vars => {if let Some(env_vars) = env_vars {
             env_vars.iter().map(|(k, v)| format!("{} = \"{}\"", k, v)).collect::<Vec<String>>().join(", ")
         } else {String::new()}},

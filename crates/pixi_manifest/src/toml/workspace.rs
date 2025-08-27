@@ -110,6 +110,11 @@ impl TomlWorkspace {
 
         let warnings = preview_warnings;
 
+        let mut conda_pypi_map = self.conda_pypi_map.unwrap_or_default();
+        if let Some(external_map) = external.conda_pypi_map {
+            conda_pypi_map.extend(external_map);
+        }
+
         Ok(WithWarnings::from(Workspace {
             name: self.name.or(external.name),
             version: self.version.or(external.version),
@@ -127,7 +132,11 @@ impl TomlWorkspace {
             channels: self.channels,
             channel_priority: self.channel_priority,
             platforms: self.platforms.value,
-            conda_pypi_map: self.conda_pypi_map,
+            conda_pypi_map: if conda_pypi_map.is_empty() {
+                None
+            } else {
+                Some(conda_pypi_map)
+            },
             pypi_options: self.pypi_options,
             s3_options: self.s3_options,
             preview,
