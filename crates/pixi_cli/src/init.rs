@@ -338,7 +338,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             None,
             &vec![],
             config.s3_options,
-            conda_pypi_map,
+            config.conda_pypi_map,
             Some(&env_vars),
         );
         let mut workspace =
@@ -367,6 +367,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         let index_url = config.pypi_config.index_url;
         let extra_index_urls = config.pypi_config.extra_index_urls;
+
+        let conda_pypi_map_str = config.conda_pypi_map.clone().map(|map| {
+            if map.is_empty() {
+                "{}".to_string()
+            } else {
+                let map_items = map
+                    .into_iter()
+                    .map(|(k, v)| format!("\"{}\" = \"{}\"", k, v))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("{{ {map_items} }}")
+            }
+        });
 
         // Dialog with user to create a 'pyproject.toml' or 'pixi.toml' manifest
         // If nothing is defined but there is a `pyproject.toml` file, ask the user.
@@ -466,18 +479,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .map(|name| name.as_dist_info_name().to_string())
                 .unwrap_or_else(|_| default_name.clone());
 
-            let conda_pypi_map_str = config.conda_pypi_map.map(|map| {
-                if map.is_empty() {
-                    "{}".to_string()
-                } else {
-                    let map_items = map
-                        .into_iter()
-                        .map(|(k, v)| format!("\"{{}}\" = \"{{}}\"", k, v))
-                        .collect::<Vec<_>>()
-                        .join(", ");
-                    format!("{{ {{ {map_items} }} }}")
-                }
-            });
+            
 
             let rv = env
                 .render_named_str(
